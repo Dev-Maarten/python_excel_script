@@ -5,8 +5,15 @@ from openpyxl import load_workbook
 
 
 # Load the Excel file
-file_path = 'Meerendael-leden (1).xlsx'
+excel_files = [f for f in os.listdir('.') if f.endswith('.xlsx') or f.endswith('.xls')]
+if not excel_files:
+    raise FileNotFoundError("No Excel files found in the current directory.")
+
+file_path = excel_files[0] 
 xls = pd.ExcelFile(file_path)
+
+xls = pd.ExcelFile(file_path)
+df = pd.read_excel(xls, sheet_name=eigenaren)
 
 # Load the 'Eigenaren' sheet
 df = pd.read_excel(xls, sheet_name='Eigenaren')
@@ -16,28 +23,37 @@ def parse(full_name):
     if pd.isna(full_name):
         return '', '', ''
     
-    parts = full_name.strip().strip()
-    voorletters = parts[0] if "." in parts[0] else ""
-    rest = parts[1:] if voorletters else parts
+    parts = full_name.strip().split()
+    if not parts:
+        return '', '', ''
     
-    tussenvoegsels = {"van", "van de", "van der", "de", "den", "ter", "ten", "het", "der"}
+    voorletters = ""
     tussenvoegsel = ""
     achternaam = ""
     
-    if len(rest) >= 2:
-        possible_tv = " ".join(rest[:-1]).lower()
-        for tv in sorted(tussenvoegsels, key=len, reverse=True):
-            if possible_tv.endswith(tv):
-                tussenvoegsel = tv
-                achternaam = " ".join(rest).replace(tv, "", 1).strip()
+    
+    if "." in parts[0]:
+        voorletters = parts[0]
+        rest = parts[1:]
+    else:
+        rest = parts
 
+    tussenvoegsels = {"van", "van de", "van der", "de", "den", "ter", "ten", "het", "der"}
+    
+    # Check for multi-word tussenvoegsel
+    if len(rest) >= 2:
+        for i in range(len(rest)-1):
+            possible_tv = " ".join(rest[:i+1]).lower()
+            if possible_tv in tussenvoegsels:
+                tussenvoegsel = possible_tv
+                achternaam = " ".join(rest[i+1:])
                 break
-        if not achternaam:
+        else:
             achternaam = " ".join(rest)
     elif rest:
         achternaam = rest[0]
-
-        return voorletters.strip(), tussenvoegsel.strip(), achternaam.strip()
+    
+    return voorletters.strip(), tussenvoegsel.strip(), achternaam.strip()
 
 def parse_address(address):
     """
@@ -93,6 +109,7 @@ for index, group in grouped:
     # Fill in primary person
     name_parts = primary["Eigenaar"].split()
     row["(Achter-) naam*"] = name_parts[-1]
+    row["Tussenvoegsel"] = " ".join(name_parts[1:-1]) if len(name_parts) > 2 else ""
     row["Voorletters / -naam"] = name_parts[0]
 
     # Parse main address
@@ -135,6 +152,28 @@ for index, group in grouped:
 
 # Save to Excel
 output_df = pd.DataFrame(output_data)
-output_df.to_excel("converted_ledenlijst.xlsx", index=False)
+output_df.to_excel("converted_ledenlijst.xlsx", index=False) 
+
+from openpyxl import load_workbook
+
+# Load the workbook you just saved
+wb = load_workbook("converted_ledenlijst.xlsx")
+ws = wb.active
+
+# Auto-adjust column widths
+for col in ws.columns:
+    max_length = 0
+    column = col[0].column_letter  # Get column name like 'A', 'B', etc.
+    for cell in col:
+        try:
+            if cell.value:
+                max_length = max(max_length, len(str(cell.value)))
+        except:
+            pass
+    adjusted_width = (max_length + 2)
+    ws.column_dimensions[column].width = adjusted_width
+
+# Save again with adjusted widths
+wb.save("converted_ledenlijst.xlsx")
 
 print("Data has been processed and saved to 'converted_ledenlijst.xlsx'.")
