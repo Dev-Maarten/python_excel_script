@@ -4,7 +4,6 @@ import os
 from openpyxl.utils import get_column_letter
 from openpyxl import load_workbook
 
-
 # Load the Excel file
 excel_files = [f for f in os.listdir('.') if f.endswith('.xlsx') or f.endswith('.xls')]
 if not excel_files:
@@ -17,41 +16,62 @@ xls = pd.ExcelFile(file_path)
 df = pd.read_excel(xls, sheet_name='Eigenaren')
 
 
-def parse(full_name):
+def parse_name(full_name):
     if pd.isna(full_name):
-        return '', '', ''
-    
-    parts = full_name.strip().split()
-    if not parts:
-        return '', '', ''
-    
-    voorletters = ""
-    tussenvoegsel = ""
-    achternaam = ""
-    
-    
-    if "." in parts[0]:
-        voorletters = parts[0]
-        rest = parts[1:]
-    else:
-        rest = parts
+        return "", "", "", ""
 
-    tussenvoegsels = {"van", "van de", "van der", "de", "den", "ter", "ten", "het", "der"}
-    
-    # Check for multi-word tussenvoegsel
-    if len(rest) >= 2:
-        for i in range(len(rest)-1):
-            possible_tv = " ".join(rest[:i+1]).lower()
-            if possible_tv in tussenvoegsels:
-                tussenvoegsel = possible_tv
-                achternaam = " ".join(rest[i+1:])
-                break
+    full_name = str(full_name).strip()
+
+    # Normalize title
+    title_map = {
+        "de heer": "Man", "dhr.": "Man", "dhr": "Man", "heer": "Man",
+        "mevrouw": "Vrouw", "mw.": "Vrouw", "mw": "Vrouw"
+    }
+    title = ""
+    for k, v in title_map.items():
+        if full_name.lower().startswith(k):
+            title = v
+            full_name = full_name[len(k):].strip()
+            break
+
+    # Extract voorletters (in or out of parentheses)
+    voorletters_match = re.match(r"\(?([A-Z][a-zA-Z.]*)\)?", full_name)
+    if voorletters_match:
+        voorletters = voorletters_match.group(1).strip()
+        full_name = full_name[voorletters_match.end():].strip()
+    else:
+        voorletters = ""
+
+    # Define tussenvoegsels
+    tussenvoegsel_set = {
+        "van", "van de", "van der", "de", "den", "ter", "ten", "het", "der", "op", "aan", "in", "uit"
+    }
+
+    # Split the rest of the name
+    name_parts = full_name.split()
+    tussenvoegsel = ""
+    achternaam_parts = []
+
+    i = 0
+    while i < len(name_parts):
+        candidate = name_parts[i].lower()
+        # Check if current + next are a known tussenvoegsel
+        if i < len(name_parts) - 1 and f"{candidate} {name_parts[i + 1].lower()}" in tussenvoegsel_set:
+            tussenvoegsel = f"{candidate} {name_parts[i + 1]}"
+            i += 2
+            break
+        elif candidate in tussenvoegsel_set:
+            tussenvoegsel = candidate
+            i += 1
+            break
         else:
-            achternaam = " ".join(rest)
-    elif rest:
-        achternaam = rest[0]
-    
-    return voorletters.strip(), tussenvoegsel.strip(), achternaam.strip()
+            break  # Stop at first non-tussenvoegsel
+
+    achternaam_parts = name_parts[i:]
+    achternaam = " ".join(achternaam_parts).strip()
+
+    return title, voorletters.strip(), tussenvoegsel.strip(), achternaam.strip()
+
 
 def parse_address(address):
     """
@@ -73,23 +93,24 @@ def parse_address(address):
     except Exception:
         return None, None, None, None
 
+
 # Group rows by Index nr. to collect cohabitants
 grouped = df.groupby('Index nr.')
 
 # Define the target structure
 output_columns = [
-    "(Achter-) naam*", "Voorletters / -naam", "Tussenvoegsel", "Geslacht / type*", 
-    "Straatnaam*", "Huisnummer*", "Postcode*", "Plaats*", 
-    "Straatnaam postadres", "Huisnummer postadres", "Postcode postadres", "Plaats postadres", 
-    "Categorie", "Telefoonnummer 1", "Type telefoonnummer 1", 
-    "Telefoonnummer 2", "Type telefoonnummer 2", "Telefoonnummer 3", "Type telefoonnummer 3", 
-    "E-mailadressen", "IBAN", "Is debiteur", "Is crediteur", "Incassomachtiging afgegeven", 
-    "Factuur gewenst", "Factuurtoelichting gewenst", 
-    "Achternaam contactpersoon 1", "Voorletters contactpersoon 1", "Tussenvoegsel contactpersoon 1", 
-    "Geslacht contactpersoon 1", "Telefoonnummer 1 contactpersoon 1", "Telefoonnummer 2 contactpersoon 1", 
-    "E-mailadres contactpersoon 1", 
-    "Achternaam contactpersoon 2", "Voorletters contactpersoon 2", "Tussenvoegsel contactpersoon 2", 
-    "Geslacht contactpersoon 2", "Telefoonnummer 1 contactpersoon 2", "Telefoonnummer 2 contactpersoon 2", 
+    "(Achter-) naam*", "Voorletters / -naam", "Tussenvoegsel", "Geslacht / type*",
+    "Straatnaam*", "Huisnummer*", "Postcode*", "Plaats*",
+    "Straatnaam postadres", "Huisnummer postadres", "Postcode postadres", "Plaats postadres",
+    "Categorie", "Telefoonnummer 1", "Type telefoonnummer 1",
+    "Telefoonnummer 2", "Type telefoonnummer 2", "Telefoonnummer 3", "Type telefoonnummer 3",
+    "E-mailadressen", "IBAN", "Is debiteur", "Is crediteur", "Incassomachtiging afgegeven",
+    "Factuur gewenst", "Factuurtoelichting gewenst",
+    "Achternaam contactpersoon 1", "Voorletters contactpersoon 1", "Tussenvoegsel contactpersoon 1",
+    "Geslacht contactpersoon 1", "Telefoonnummer 1 contactpersoon 1", "Telefoonnummer 2 contactpersoon 1",
+    "E-mailadres contactpersoon 1",
+    "Achternaam contactpersoon 2", "Voorletters contactpersoon 2", "Tussenvoegsel contactpersoon 2",
+    "Geslacht contactpersoon 2", "Telefoonnummer 1 contactpersoon 2", "Telefoonnummer 2 contactpersoon 2",
     "E-mailadres contactpersoon 2"
 ]
 
@@ -105,10 +126,11 @@ for index, group in grouped:
     tertiary = owners.iloc[2] if len(owners) > 2 else None
 
     # Fill in primary person
-    voorletters, tussenvoegsel, achternaam = parse(primary["Eigenaar"])
+    title, voorletters, tussenvoegsel, achternaam = parse_name(primary["Eigenaar"])
     row["Voorletters / -naam"] = voorletters
     row["Tussenvoegsel"] = tussenvoegsel
     row["(Achter-) naam*"] = achternaam
+    row["Geslacht / type*"] = title  # <-- assign title here
 
     # Parse main address
     straat, huisnr, postcode, plaats = parse_address(primary["Adres"])
@@ -132,19 +154,21 @@ for index, group in grouped:
 
     # Contactpersoon 1
     if secondary is not None:
-        voorletters, tussenvoegsel, achternaam = parse(secondary["Eigenaar"])
-        row["Achternaam contactpersoon 1"] = achternaam
-        row["Tussenvoegsel contactpersoon 1"] = tussenvoegsel
-        row["Voorletters contactpersoon 1"] = voorletters
+        title_cp1, voorletters_cp1, tussenvoegsel_cp1, achternaam_cp1 = parse_name(secondary["Eigenaar"])
+        row["Achternaam contactpersoon 1"] = achternaam_cp1
+        row["Tussenvoegsel contactpersoon 1"] = tussenvoegsel_cp1
+        row["Voorletters contactpersoon 1"] = voorletters_cp1
+        row["Geslacht contactpersoon 1"] = title_cp1  # assign title here
         row["E-mailadres contactpersoon 1"] = secondary["Email eigenaar"]
         row["Telefoonnummer 1 contactpersoon 1"] = str(secondary["Telefoon eigenaar"]).split(',')[0]
 
     # Contactpersoon 2
     if tertiary is not None:
-        voorletters, tussenvoegsel, achternaam = parse(tertiary["Eigenaar"])
-        row["Achternaam contactpersoon 1"] = achternaam
-        row["Tussenvoegsel contactpersoon 1"] = tussenvoegsel
-        row["Voorletters contactpersoon 1"] = voorletters
+        title_cp2, voorletters_cp2, tussenvoegsel_cp2, achternaam_cp2 = parse_name(tertiary["Eigenaar"])
+        row["Achternaam contactpersoon 2"] = achternaam_cp2
+        row["Tussenvoegsel contactpersoon 2"] = tussenvoegsel_cp2
+        row["Voorletters contactpersoon 2"] = voorletters_cp2
+        row["Geslacht contactpersoon 2"] = title_cp2  # assign title here
         row["E-mailadres contactpersoon 2"] = tertiary["Email eigenaar"]
         row["Telefoonnummer 1 contactpersoon 2"] = str(tertiary["Telefoon eigenaar"]).split(',')[0]
 
@@ -152,7 +176,7 @@ for index, group in grouped:
 
 # Save to Excel
 output_df = pd.DataFrame(output_data)
-output_df.to_excel("converted_ledenlijst.xlsx", index=False) 
+output_df.to_excel("converted_ledenlijst.xlsx", index=False)
 
 from openpyxl import load_workbook
 
