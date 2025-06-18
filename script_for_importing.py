@@ -89,7 +89,7 @@ def parse_address(address):
         street_name = re.sub(r'\d.*', '', street_part).strip()
         house_number = street_part.replace(street_name, '').strip()
 
-        return street_name, house_number, postcode.strip(), city strip() parse_name grouped index.
+        return street_name, house_number, postcode.strip()
     except Exception:
         return None, None, None, None
 
