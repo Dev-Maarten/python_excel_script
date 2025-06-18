@@ -4,7 +4,7 @@ import os
 from openpyxl.utils import get_column_letter
 from openpyxl import load_workbook
 
-# Load the Excel file
+
 excel_files = [f for f in os.listdir('.') if f.endswith('.xlsx') or f.endswith('.xls')]
 if not excel_files:
     raise FileNotFoundError("No Excel files found in the current directory.")
@@ -22,7 +22,7 @@ def parse_name(full_name):
 
     full_name = str(full_name).strip()
 
-    # Normalize title
+    
     title_map = {
         "de heer": "Man", "dhr.": "Man", "dhr": "Man", "heer": "Man",
         "mevrouw": "Vrouw", "mw.": "Vrouw", "mw": "Vrouw"
@@ -42,12 +42,12 @@ def parse_name(full_name):
     else:
         voorletters = ""
 
-    # Define tussenvoegsels
+    
     tussenvoegsel_set = {
         "van", "van de", "van der", "de", "den", "ter", "ten", "het", "der", "op", "aan", "in", "uit"
     }
 
-    # Split the rest of the name
+    
     name_parts = full_name.split()
     tussenvoegsel = ""
     achternaam_parts = []
@@ -55,7 +55,7 @@ def parse_name(full_name):
     i = 0
     while i < len(name_parts):
         candidate = name_parts[i].lower()
-        # Check if current + next are a known tussenvoegsel
+        #
         if i < len(name_parts) - 1 and f"{candidate} {name_parts[i + 1].lower()}" in tussenvoegsel_set:
             tussenvoegsel = f"{candidate} {name_parts[i + 1]}"
             i += 2
@@ -65,7 +65,7 @@ def parse_name(full_name):
             i += 1
             break
         else:
-            break  # Stop at first non-tussenvoegsel
+            break  
 
     achternaam_parts = name_parts[i:]
     achternaam = " ".join(achternaam_parts).strip()
@@ -89,7 +89,7 @@ def parse_address(address):
         street_name = re.sub(r'\d.*', '', street_part).strip()
         house_number = street_part.replace(street_name, '').strip()
 
-        return street_name, house_number, postcode.strip(), city
+        return street_name, house_number, postcode.strip(), city strip() parse_name grouped index.
     except Exception:
         return None, None, None, None
 
@@ -125,12 +125,12 @@ for index, group in grouped:
     secondary = owners.iloc[1] if len(owners) > 1 else None
     tertiary = owners.iloc[2] if len(owners) > 2 else None
 
-    # Fill in primary person
+    
     title, voorletters, tussenvoegsel, achternaam = parse_name(primary["Eigenaar"])
     row["Voorletters / -naam"] = voorletters
     row["Tussenvoegsel"] = tussenvoegsel
     row["(Achter-) naam*"] = achternaam
-    row["Geslacht / type*"] = title  # <-- assign title here
+    row["Geslacht / type*"] = title  
 
     # Parse main address
     straat, huisnr, postcode, plaats = parse_address(primary["Adres"])
@@ -158,7 +158,7 @@ for index, group in grouped:
         row["Achternaam contactpersoon 1"] = achternaam_cp1
         row["Tussenvoegsel contactpersoon 1"] = tussenvoegsel_cp1
         row["Voorletters contactpersoon 1"] = voorletters_cp1
-        row["Geslacht contactpersoon 1"] = title_cp1  # assign title here
+        row["Geslacht contactpersoon 1"] = title_cp1  
         row["E-mailadres contactpersoon 1"] = secondary["Email eigenaar"]
         row["Telefoonnummer 1 contactpersoon 1"] = str(secondary["Telefoon eigenaar"]).split(',')[0]
 
@@ -168,7 +168,7 @@ for index, group in grouped:
         row["Achternaam contactpersoon 2"] = achternaam_cp2
         row["Tussenvoegsel contactpersoon 2"] = tussenvoegsel_cp2
         row["Voorletters contactpersoon 2"] = voorletters_cp2
-        row["Geslacht contactpersoon 2"] = title_cp2  # assign title here
+        row["Geslacht contactpersoon 2"] = title_cp2 
         row["E-mailadres contactpersoon 2"] = tertiary["Email eigenaar"]
         row["Telefoonnummer 1 contactpersoon 2"] = str(tertiary["Telefoon eigenaar"]).split(',')[0]
 
@@ -187,7 +187,7 @@ ws = wb.active
 # Auto-adjust column widths
 for col in ws.columns:
     max_length = 0
-    column = col[0].column_letter  # Get column name like 'A', 'B', etc.
+    column = col[0].column_letter 
     for cell in col:
         try:
             if cell.value:
