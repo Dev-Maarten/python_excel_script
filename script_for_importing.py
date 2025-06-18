@@ -1,5 +1,6 @@
 import pandas as pd
 import re
+import os
 from openpyxl.utils import get_column_letter
 from openpyxl import load_workbook
 
@@ -9,11 +10,8 @@ excel_files = [f for f in os.listdir('.') if f.endswith('.xlsx') or f.endswith('
 if not excel_files:
     raise FileNotFoundError("No Excel files found in the current directory.")
 
-file_path = excel_files[0] 
+file_path = 'Meerendael-leden (1).xlsx'
 xls = pd.ExcelFile(file_path)
-
-xls = pd.ExcelFile(file_path)
-df = pd.read_excel(xls, sheet_name=eigenaren)
 
 # Load the 'Eigenaren' sheet
 df = pd.read_excel(xls, sheet_name='Eigenaren')
@@ -107,10 +105,10 @@ for index, group in grouped:
     tertiary = owners.iloc[2] if len(owners) > 2 else None
 
     # Fill in primary person
-    name_parts = primary["Eigenaar"].split()
-    row["(Achter-) naam*"] = name_parts[-1]
-    row["Tussenvoegsel"] = " ".join(name_parts[1:-1]) if len(name_parts) > 2 else ""
-    row["Voorletters / -naam"] = name_parts[0]
+    voorletters, tussenvoegsel, achternaam = parse(primary["Eigenaar"])
+    row["Voorletters / -naam"] = voorletters
+    row["Tussenvoegsel"] = tussenvoegsel
+    row["(Achter-) naam*"] = achternaam
 
     # Parse main address
     straat, huisnr, postcode, plaats = parse_address(primary["Adres"])
@@ -134,17 +132,19 @@ for index, group in grouped:
 
     # Contactpersoon 1
     if secondary is not None:
-        name_parts = secondary["Eigenaar"].split()
-        row["Achternaam contactpersoon 1"] = name_parts[-1]
-        row["Voorletters contactpersoon 1"] = name_parts[0]
+        voorletters, tussenvoegsel, achternaam = parse(secondary["Eigenaar"])
+        row["Achternaam contactpersoon 1"] = achternaam
+        row["Tussenvoegsel contactpersoon 1"] = tussenvoegsel
+        row["Voorletters contactpersoon 1"] = voorletters
         row["E-mailadres contactpersoon 1"] = secondary["Email eigenaar"]
         row["Telefoonnummer 1 contactpersoon 1"] = str(secondary["Telefoon eigenaar"]).split(',')[0]
 
     # Contactpersoon 2
     if tertiary is not None:
-        name_parts = tertiary["Eigenaar"].split()
-        row["Achternaam contactpersoon 2"] = name_parts[-1]
-        row["Voorletters contactpersoon 2"] = name_parts[0]
+        voorletters, tussenvoegsel, achternaam = parse(tertiary["Eigenaar"])
+        row["Achternaam contactpersoon 1"] = achternaam
+        row["Tussenvoegsel contactpersoon 1"] = tussenvoegsel
+        row["Voorletters contactpersoon 1"] = voorletters
         row["E-mailadres contactpersoon 2"] = tertiary["Email eigenaar"]
         row["Telefoonnummer 1 contactpersoon 2"] = str(tertiary["Telefoon eigenaar"]).split(',')[0]
 
