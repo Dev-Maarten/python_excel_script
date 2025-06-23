@@ -9,12 +9,26 @@ excel_files = [f for f in os.listdir('.') if f.endswith('.xlsx') or f.endswith('
 if not excel_files:
     raise FileNotFoundError("No Excel files found in the current directory.")
 
-file_path = 'Meerendael-leden (1).xlsx'
+elif len(excel_files) == 1:
+    file_path = excel_files[0]
+    print(f"Using Excel file: {file_path}")
+else:
+    print("Multiple Excel files found:")
+    for i, f in enumerate(excel_files, start=1):
+        print(f"{i}: {f}")
+    choice = input("Enter the number of the file you want to use: ")
+    try:
+        file_path = excel_files[int(choice)-1]
+    except:
+        raise ValueError("Invalid selection.")
+
 xls = pd.ExcelFile(file_path)
+
 
 # Load the 'Eigenaren' sheet
 df = pd.read_excel(xls, sheet_name='Eigenaren')
-
+if 'Eigenaren' not in xls.sheet_names:
+    raise ValueError(f"The sheet 'Eigenaren' was not found in {file_path}. Available sheets: {xls.sheet_names}")
 
 def parse_name(full_name):
     if pd.isna(full_name):
@@ -74,9 +88,7 @@ def parse_name(full_name):
 
 
 def parse_address(address):
-    """
-    Split an address like 'Street 123, 1234AB City' into components.
-    """
+    
     if pd.isna(address):
         return None, None, None, None
 
@@ -89,7 +101,7 @@ def parse_address(address):
         street_name = re.sub(r'\d.*', '', street_part).strip()
         house_number = street_part.replace(street_name, '').strip()
 
-        return street_name, house_number, postcode.strip()
+        return street_name, house_number, postcode.strip(), city.strip()
     except Exception:
         return None, None, None, None
 
@@ -113,34 +125,44 @@ output_columns = [
     "Geslacht contactpersoon 2", "Telefoonnummer 1 contactpersoon 2", "Telefoonnummer 2 contactpersoon 2",
     "E-mailadres contactpersoon 2"
 ]
-
 output_data = []
 
-# Process each grouped set
 for index, group in grouped:
     row = dict.fromkeys(output_columns, "")
 
     owners = group.reset_index(drop=True)
-    primary = owners.iloc[0]
-    secondary = owners.iloc[1] if len(owners) > 1 else None
-    tertiary = owners.iloc[2] if len(owners) > 2 else None
+    people = []
 
-    
-    title, voorletters, tussenvoegsel, achternaam = parse_name(primary["Eigenaar"])
-    row["Voorletters / -naam"] = voorletters
-    row["Tussenvoegsel"] = tussenvoegsel
-    row["(Achter-) naam*"] = achternaam
-    row["Geslacht / type*"] = title  
+    # Parse each person in the group
+    for i, person in owners.iterrows():
+        title, voorletters, tussenvoegsel, achternaam = parse_name(person["Eigenaar"])
+        people.append({
+            "title": title,
+            "voorletters": voorletters,
+            "tussenvoegsel": tussenvoegsel,
+            "achternaam": achternaam,
+            "email": person["Email eigenaar"],
+            "telefoon": str(person["Telefoon eigenaar"]).split(',')[0].split(';')[0],
+        })
+
+    # Combine last names only (for hoofdinschrijving)
+    combined_achternamen = " & ".join([p["achternaam"] for p in people])
+    row["(Achter-) naam*"] = combined_achternamen
+
+    # Main columns: leave other 3 empty
+    row["Voorletters / -naam"] = ""
+    row["Tussenvoegsel"] = ""
+    row["Geslacht / type*"] = ""
 
     # Parse main address
-    straat, huisnr, postcode, plaats = parse_address(primary["Adres"])
+    straat, huisnr, postcode, plaats = parse_address(owners.iloc[0]["Adres"])
     row["Straatnaam*"] = straat
     row["Huisnummer*"] = huisnr
     row["Postcode*"] = postcode
     row["Plaats*"] = plaats
 
     # Parse post address
-    postadres = primary["Postadres eigenenaar"]
+    postadres = owners.iloc[0]["Postadres eigenenaar"]
     straat_post, huisnr_post, postcode_post, plaats_post = parse_address(postadres)
     row["Straatnaam postadres"] = straat_post
     row["Huisnummer postadres"] = huisnr_post
@@ -148,56 +170,53 @@ for index, group in grouped:
     row["Plaats postadres"] = plaats_post
 
     # Other fields
-    row["Categorie"] = primary["Unittype"]
-    row["E-mailadressen"] = primary["Email eigenaar"]
-    row["Telefoonnummer 1"] = str(primary["Telefoon eigenaar"]).split(',')[0].split(';')[0]
+    row["Categorie"] = owners.iloc[0]["Unittype"]
+    row["E-mailadressen"] = people[0]["email"]
+    row["Telefoonnummer 1"] = people[0]["telefoon"]
 
-    # Contactpersoon 1
-    if secondary is not None:
-        title_cp1, voorletters_cp1, tussenvoegsel_cp1, achternaam_cp1 = parse_name(secondary["Eigenaar"])
-        row["Achternaam contactpersoon 1"] = achternaam_cp1
-        row["Tussenvoegsel contactpersoon 1"] = tussenvoegsel_cp1
-        row["Voorletters contactpersoon 1"] = voorletters_cp1
-        row["Geslacht contactpersoon 1"] = title_cp1  
-        row["E-mailadres contactpersoon 1"] = secondary["Email eigenaar"]
-        row["Telefoonnummer 1 contactpersoon 1"] = str(secondary["Telefoon eigenaar"]).split(',')[0]
+    # Contactpersoon 1 = owner 0
+    if len(people) > 0:
+        p1 = people[0]
+        row["Achternaam contactpersoon 1"] = p1["achternaam"]
+        row["Tussenvoegsel contactpersoon 1"] = p1["tussenvoegsel"]
+        row["Voorletters contactpersoon 1"] = p1["voorletters"]
+        row["Geslacht contactpersoon 1"] = p1["title"]
+        row["E-mailadres contactpersoon 1"] = p1["email"]
+        row["Telefoonnummer 1 contactpersoon 1"] = p1["telefoon"]
 
-    # Contactpersoon 2
-    if tertiary is not None:
-        title_cp2, voorletters_cp2, tussenvoegsel_cp2, achternaam_cp2 = parse_name(tertiary["Eigenaar"])
-        row["Achternaam contactpersoon 2"] = achternaam_cp2
-        row["Tussenvoegsel contactpersoon 2"] = tussenvoegsel_cp2
-        row["Voorletters contactpersoon 2"] = voorletters_cp2
-        row["Geslacht contactpersoon 2"] = title_cp2 
-        row["E-mailadres contactpersoon 2"] = tertiary["Email eigenaar"]
-        row["Telefoonnummer 1 contactpersoon 2"] = str(tertiary["Telefoon eigenaar"]).split(',')[0]
+    # Contactpersoon 2 = owner 1 (if exists)
+    if len(people) > 1:
+        p2 = people[1]
+        row["Achternaam contactpersoon 2"] = p2["achternaam"]
+        row["Tussenvoegsel contactpersoon 2"] = p2["tussenvoegsel"]
+        row["Voorletters contactpersoon 2"] = p2["voorletters"]
+        row["Geslacht contactpersoon 2"] = p2["title"]
+        row["E-mailadres contactpersoon 2"] = p2["email"]
+        row["Telefoonnummer 1 contactpersoon 2"] = p2["telefoon"]
 
     output_data.append(row)
 
-# Save to Excel
 output_df = pd.DataFrame(output_data)
-output_df.to_excel("converted_ledenlijst.xlsx", index=False)
+base_name = os.path.splitext(os.path.basename(file_path))[0]
+output_filename = f"converted_{base_name}.xlsx"
 
-from openpyxl import load_workbook
+# Save to Excel
+output_df.to_excel(output_filename, index=False)
 
-# Load the workbook you just saved
-wb = load_workbook("converted_ledenlijst.xlsx")
+# Load and adjust column widths
+wb = load_workbook(output_filename)
 ws = wb.active
 
-# Auto-adjust column widths
 for col in ws.columns:
     max_length = 0
-    column = col[0].column_letter 
+    column = col[0].column_letter
     for cell in col:
         try:
             if cell.value:
                 max_length = max(max_length, len(str(cell.value)))
         except:
             pass
-    adjusted_width = (max_length + 2)
-    ws.column_dimensions[column].width = adjusted_width
+    ws.column_dimensions[column].width = max_length + 2
 
-# Save again with adjusted widths
-wb.save("converted_ledenlijst.xlsx")
-
-print("Data has been processed and saved to 'converted_ledenlijst.xlsx'.")
+wb.save(output_filename)
+print(f"Data has been processed and saved to '{output_filename}'.")
